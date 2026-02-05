@@ -86,8 +86,8 @@ public class CsvWorker : BackgroundService
             Encoding = Encoding.UTF8
         };
 
-        await using var reader = new StreamReader(filePath, Encoding.UTF8);
-        await using var csv = new CsvReader(reader, config);
+        using var reader = new StreamReader(filePath, Encoding.UTF8);
+        using var csv = new CsvReader(reader, config);
 
         while (await csv.ReadAsync())
         {
@@ -95,8 +95,8 @@ public class CsvWorker : BackgroundService
 
             var record = new UserDepartmentRecord
             {
-                MicrosoftUsername = csv.GetField("microsoft_username"),
-                Department = csv.GetField("department")
+                MicrosoftUsername = csv.GetField("microsoft_username") ?? string.Empty,
+                Department = csv.GetField("department") ?? string.Empty
             };
             if (!string.IsNullOrWhiteSpace(record.MicrosoftUsername) &&
                 !string.IsNullOrWhiteSpace(record.Department))
