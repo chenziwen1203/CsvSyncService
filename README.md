@@ -4,6 +4,7 @@ cd /Users/chenziwen/PycharmProjects/Falcon/CsvSyncService/CsvSyncWorker
 dotnet publish -c Release -r win-x64 --self-contained false -o ./publish
 
 New-Service -Name "CsvSyncService" -BinaryPathName "C:\Services\CsvSyncService\CsvSyncWorker.exe" -StartupType Automatic
+Start-Service CsvSyncService
 
 This project is intended to be a **standalone Windows Service** that:
 
