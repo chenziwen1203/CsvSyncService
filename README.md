@@ -1,7 +1,10 @@
 ## CsvSyncService - Windows Service for User-Department Mapping
 
+```shell
 cd /Users/chenziwen/PycharmProjects/Falcon/CsvSyncService/CsvSyncWorker
 dotnet publish -c Release -r win-x64 --self-contained false -o ./publish
+dotnet run --project CsvSyncWorker/CsvSyncWorker.csproj
+```
 
 This project is intended to be a **standalone Windows Service** that:
 
