@@ -26,19 +26,22 @@ public class CsvWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var folderPath = _configuration["Watcher:FolderPath"];
-        var intervalSeconds = int.TryParse(_configuration["Watcher:IntervalSeconds"], out var v) ? v : 60;
-
-        if (string.IsNullOrWhiteSpace(folderPath))
-        {
-            _logger.LogError("Watcher:FolderPath is not configured.");
-            return;
-        }
-
-        _logger.LogInformation("CsvWorker started. Watching folder: {Folder} (every {Seconds} seconds)", folderPath, intervalSeconds);
+        _logger.LogInformation("CsvWorker started.");
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            var folderPath = _configuration["Watcher:FolderPath"];
+            var intervalSeconds = int.TryParse(_configuration["Watcher:IntervalSeconds"], out var v) ? v : 60;
+
+            if (string.IsNullOrWhiteSpace(folderPath))
+            {
+                _logger.LogError("Watcher:FolderPath is not configured. Retrying in {Seconds} seconds.", intervalSeconds);
+                await Task.Delay(TimeSpan.FromSeconds(intervalSeconds), stoppingToken);
+                continue;
+            }
+
+            _logger.LogInformation("Watching folder: {Folder} (every {Seconds} seconds)", folderPath, intervalSeconds);
+
             try
             {
                 await ProcessFolderAsync(folderPath, stoppingToken);
@@ -88,6 +91,11 @@ public class CsvWorker : BackgroundService
 
         using var reader = new StreamReader(filePath, Encoding.UTF8);
         using var csv = new CsvReader(reader, config);
+
+        if (await csv.ReadAsync())
+        {
+            csv.ReadHeader();
+        }
 
         while (await csv.ReadAsync())
         {
