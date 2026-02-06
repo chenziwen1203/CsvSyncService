@@ -71,10 +71,55 @@ public class CsvWorker : BackgroundService
             {
                 var records = await LoadCsvAsync(file, cancellationToken);
                 await _backendClient.SyncUserDepartmentMappingsAsync(records, cancellationToken);
+                await TryDeleteCsvFileAsync(file, cancellationToken);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to process CSV file: {File}", file);
+            }
+        }
+    }
+
+    private async Task TryDeleteCsvFileAsync(string filePath, CancellationToken cancellationToken)
+    {
+        if (!File.Exists(filePath))
+        {
+            return;
+        }
+
+        const int maxAttempts = 5;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                // If the file is read-only, try to normalize attributes before deleting.
+                File.SetAttributes(filePath, FileAttributes.Normal);
+
+                File.Delete(filePath);
+                _logger.LogInformation("Deleted processed CSV file: {File}", filePath);
+                return;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                if (attempt == maxAttempts)
+                {
+                    // Don't fail the whole worker loop just because cleanup failed.
+                    _logger.LogWarning(ex, "Failed to delete processed CSV file after {Attempts} attempts: {File}",
+                        maxAttempts, filePath);
+                    return;
+                }
+
+                // Most common case: producer is still copying/writing the file.
+                var delay = TimeSpan.FromMilliseconds(500 * attempt);
+                _logger.LogInformation(ex,
+                    "Delete attempt {Attempt}/{MaxAttempts} failed; will retry after {DelayMs}ms: {File}",
+                    attempt, maxAttempts, delay.TotalMilliseconds, filePath);
+                await Task.Delay(delay, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Unexpected error while deleting processed CSV file: {File}", filePath);
+                return;
             }
         }
     }
