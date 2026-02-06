@@ -43,24 +43,34 @@ public class BackendClient
             cancellationToken
         ) ?? new List<UserDeptDto>();
 
-        // Build sets for comparison
-        var csvSet = csvRecords
-            .Select(r => (r.MicrosoftUsername, r.Department))
-            .ToHashSet();
+        var csvByUser = csvRecords
+            .Where(r => !string.IsNullOrWhiteSpace(r.MicrosoftUsername) &&
+                        !string.IsNullOrWhiteSpace(r.Department))
+            .GroupBy(r => r.MicrosoftUsername.Trim(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Last().Department.Trim(), StringComparer.OrdinalIgnoreCase);
 
-        var backendSet = allMappings
-            .Select(m => (m.microsoft_username, m.department))
-            .ToHashSet();
+        var backendByUser = allMappings
+            .Where(m => !string.IsNullOrWhiteSpace(m.microsoft_username))
+            .ToDictionary(m => m.microsoft_username, m => m, StringComparer.OrdinalIgnoreCase);
 
-        // Need to create: in CSV but not in backend
-        var toCreate = csvSet.Except(backendSet).ToList();
-        // Need to delete: in backend but not in CSV
-        var toDelete = allMappings
-            .Where(m => !csvSet.Contains((m.microsoft_username, m.department)))
+        var toCreate = csvByUser
+            .Where(kvp => !backendByUser.ContainsKey(kvp.Key))
+            .Select(kvp => (microsoftUsername: kvp.Key, department: kvp.Value))
             .ToList();
 
-        _logger.LogInformation("Sync summary: {Create} to create, {Delete} to delete",
-            toCreate.Count, toDelete.Count);
+        var toUpdate = csvByUser
+            .Where(kvp => backendByUser.TryGetValue(kvp.Key, out var existing) &&
+                          !string.Equals(existing.department, kvp.Value, StringComparison.OrdinalIgnoreCase))
+            .Select(kvp => (mapping: backendByUser[kvp.Key], department: kvp.Value))
+            .ToList();
+
+        var toDelete = backendByUser
+            .Where(kvp => !csvByUser.ContainsKey(kvp.Key))
+            .Select(kvp => kvp.Value)
+            .ToList();
+
+        _logger.LogInformation("Sync summary: {Create} to create, {Update} to update, {Delete} to delete",
+            toCreate.Count, toUpdate.Count, toDelete.Count);
 
         // 2. Create missing records
         foreach (var (microsoftUsername, department) in toCreate)
@@ -85,7 +95,30 @@ public class BackendClient
             }
         }
 
-        // 3. Delete records not present in CSV
+        // 3. Update records where department differs from CSV
+        foreach (var (mapping, department) in toUpdate)
+        {
+            var payload = new
+            {
+                microsoft_username = mapping.microsoft_username,
+                department = department
+            };
+
+            var resp = await _httpClient.PutAsJsonAsync(
+                $"/user-department-mappings/{mapping.Id}",
+                payload,
+                cancellationToken
+            );
+
+            if (!resp.IsSuccessStatusCode)
+            {
+                var body = await resp.Content.ReadAsStringAsync(cancellationToken);
+                _logger.LogWarning("Failed to update mapping {User}/{Dept}: {Status} {Body}",
+                    mapping.microsoft_username, department, resp.StatusCode, body);
+            }
+        }
+
+        // 4. Delete records not present in CSV
         foreach (var mapping in toDelete)
         {
             var resp = await _httpClient.DeleteAsync(
