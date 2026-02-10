@@ -13,7 +13,7 @@ public class UserDepartmentRecord
 public class UserDeptDto
 {
     public int Id { get; set; }
-    public string microsoft_username { get; set; } = string.Empty;
+    public string username { get; set; } = string.Empty;
     public string department { get; set; } = string.Empty;
 }
 
@@ -50,8 +50,8 @@ public class BackendClient
             .ToDictionary(g => g.Key, g => g.Last().Department.Trim(), StringComparer.OrdinalIgnoreCase);
 
         var backendByUser = allMappings
-            .Where(m => !string.IsNullOrWhiteSpace(m.microsoft_username))
-            .ToDictionary(m => m.microsoft_username, m => m, StringComparer.OrdinalIgnoreCase);
+            .Where(m => !string.IsNullOrWhiteSpace(m.username))
+            .ToDictionary(m => m.username, m => m, StringComparer.OrdinalIgnoreCase);
 
         var toCreate = csvByUser
             .Where(kvp => !backendByUser.ContainsKey(kvp.Key))
@@ -77,7 +77,7 @@ public class BackendClient
         {
             var payload = new
             {
-                microsoft_username = microsoftUsername,
+                username = microsoftUsername,
                 department = department
             };
 
@@ -100,7 +100,7 @@ public class BackendClient
         {
             var payload = new
             {
-                microsoft_username = mapping.microsoft_username,
+                username = mapping.username,
                 department = department
             };
 
@@ -114,7 +114,7 @@ public class BackendClient
             {
                 var body = await resp.Content.ReadAsStringAsync(cancellationToken);
                 _logger.LogWarning("Failed to update mapping {User}/{Dept}: {Status} {Body}",
-                    mapping.microsoft_username, department, resp.StatusCode, body);
+                    mapping.username, department, resp.StatusCode, body);
             }
         }
 

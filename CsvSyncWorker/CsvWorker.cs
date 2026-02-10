@@ -148,7 +148,7 @@ public class CsvWorker : BackgroundService
 
             var record = new UserDepartmentRecord
             {
-                MicrosoftUsername = csv.GetField("microsoft_username") ?? string.Empty,
+                MicrosoftUsername = csv.GetField("username") ?? string.Empty,
                 Department = csv.GetField("department") ?? string.Empty
             };
             if (!string.IsNullOrWhiteSpace(record.MicrosoftUsername) &&
